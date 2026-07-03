@@ -100,20 +100,38 @@ app.get('/api/download', async (req, res) => {
         const { start, end } = req.query;
         if (start || end) {
             const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
+            res.header('Content-Type', format as string);
             res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
             const ffmpegArgs = [];
             if (start) ffmpegArgs.push('-ss', start as string);
             if (end) ffmpegArgs.push('-to', end as string);
-            ffmpegArgs.push('-i', url);
-            ffmpegArgs.push('-c', 'copy');
+            ffmpegArgs.push('-i', 'pipe:0');
             if (format === 'video/mp4') {
+                ffmpegArgs.push('-c', 'copy');
                 ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
                 ffmpegArgs.push('-f', 'mp4');
             } else if (format === 'audio/mp3') {
+                ffmpegArgs.push('-c:a', 'libmp3lame');
                 ffmpegArgs.push('-f', 'mp3');
             }
             ffmpegArgs.push('pipe:1');
             const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+            ffmpegProc.stderr.on('data', data => console.error('FFmpeg Error:', data.toString()));
+            
+            try {
+                const mediaResponse = await fetch(url, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+                });
+                if (mediaResponse.body) {
+                    Readable.fromWeb(mediaResponse.body as any).pipe(ffmpegProc.stdin);
+                } else {
+                    ffmpegProc.stdin.end();
+                }
+            } catch (e) {
+                console.error("Fetch error:", e);
+                ffmpegProc.stdin.end();
+            }
+            
             ffmpegProc.stdout.pipe(res);
             return;
         }
@@ -184,20 +202,40 @@ app.get('/api/download', async (req, res) => {
        const { start, end } = req.query;
        if (start || end) {
            const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
+           res.header('Content-Type', format as string);
            res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
            const ffmpegArgs = [];
            if (start) ffmpegArgs.push('-ss', start as string);
            if (end) ffmpegArgs.push('-to', end as string);
-           ffmpegArgs.push('-i', mediaUrl);
-           ffmpegArgs.push('-c', 'copy');
+           ffmpegArgs.push('-i', 'pipe:0');
            if (format === 'video/mp4') {
+               ffmpegArgs.push('-c', 'copy');
                ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
                ffmpegArgs.push('-f', 'mp4');
            } else if (format === 'audio/mp3') {
+               ffmpegArgs.push('-c:a', 'libmp3lame');
                ffmpegArgs.push('-f', 'mp3');
            }
            ffmpegArgs.push('pipe:1');
            const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+           ffmpegProc.stderr.on('data', data => console.error('FFmpeg Error:', data.toString()));
+           
+           try {
+               const mediaResponse = await fetch(mediaUrl, {
+                   headers: {
+                       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                   }
+               });
+               if (mediaResponse.body) {
+                   Readable.fromWeb(mediaResponse.body as any).pipe(ffmpegProc.stdin);
+               } else {
+                   ffmpegProc.stdin.end();
+               }
+           } catch (e) {
+               console.error("Fetch error:", e);
+               ffmpegProc.stdin.end();
+           }
+           
            ffmpegProc.stdout.pipe(res);
            return;
        }
@@ -220,19 +258,39 @@ app.get('/api/download', async (req, res) => {
          noWarnings: true,
        });
        const directUrl = (info as any).url;
+       const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
+       res.header('Content-Type', format as string);
+       res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
        const ffmpegArgs = [];
        if (start) ffmpegArgs.push('-ss', start as string);
        if (end) ffmpegArgs.push('-to', end as string);
-       ffmpegArgs.push('-i', directUrl);
-       ffmpegArgs.push('-c', 'copy');
+       ffmpegArgs.push('-i', 'pipe:0');
        if (format === 'video/mp4') {
+           ffmpegArgs.push('-c', 'copy');
            ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
            ffmpegArgs.push('-f', 'mp4');
        } else if (format === 'audio/mp3') {
+           ffmpegArgs.push('-c:a', 'libmp3lame');
            ffmpegArgs.push('-f', 'mp3');
        }
        ffmpegArgs.push('pipe:1');
        const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+       ffmpegProc.stderr.on('data', data => console.error('FFmpeg Error:', data.toString()));
+       
+       try {
+           const mediaResponse = await fetch(directUrl, {
+               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+           });
+           if (mediaResponse.body) {
+               Readable.fromWeb(mediaResponse.body as any).pipe(ffmpegProc.stdin);
+           } else {
+               ffmpegProc.stdin.end();
+           }
+       } catch (e) {
+           console.error("Fetch error:", e);
+           ffmpegProc.stdin.end();
+       }
+       
        ffmpegProc.stdout.pipe(res);
        return;
     }
