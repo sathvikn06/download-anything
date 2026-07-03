@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link, Download, Loader2, PlayCircle, Settings2, ShieldAlert, Layers } from 'lucide-react';
+import { Link, Download, Loader2, PlayCircle, Settings2, ShieldAlert, Layers, Scissors } from 'lucide-react';
 import { useHistory } from '../hooks/useStorage';
 import { Platform, DownloadFormat, DownloadQuality, DownloadItem } from '../types';
 
@@ -68,9 +68,20 @@ export function DownloaderView() {
     }
   };
 
+  const updateTrim = (id: string, field: 'trimStart' | 'trimEnd', value: string) => {
+    setActiveDownloads(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
   const executeDownload = (item: DownloadItem) => {
     setActiveDownloads(prev => prev.map(d => d.id === item.id ? { ...d, status: 'downloading', progress: 80 } : d));
-    const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}&format=${encodeURIComponent(item.format)}&quality=${encodeURIComponent(item.quality)}`;
+    let downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}&format=${encodeURIComponent(item.format)}&quality=${encodeURIComponent(item.quality)}`;
+    
+    if (item.trimStart) {
+        downloadUrl += `&start=${encodeURIComponent(item.trimStart)}`;
+    }
+    if (item.trimEnd) {
+        downloadUrl += `&end=${encodeURIComponent(item.trimEnd)}`;
+    }
     
     const a = document.createElement('a');
     a.href = downloadUrl;
@@ -271,13 +282,37 @@ export function DownloaderView() {
                       )}
                       
                       {download.format !== 'media/gallery' && (
-                        <button
-                          onClick={() => executeDownload(download)}
-                          className="w-full bg-light-blue dark:bg-cm-gold text-white dark:text-cm-blue px-4 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>Download Now</span>
-                        </button>
+                        <div className="flex flex-col gap-3">
+                          {(download.format === 'video/mp4' || download.format === 'audio/mp3') && (
+                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <Scissors className="w-4 h-4 text-slate-500" />
+                              <div className="flex-1 flex gap-2 items-center">
+                                <input
+                                  type="text"
+                                  placeholder="Start (00:00:00)"
+                                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono focus:ring-1 focus:ring-light-blue dark:focus:ring-cm-gold outline-none"
+                                  value={download.trimStart || ''}
+                                  onChange={e => updateTrim(download.id, 'trimStart', e.target.value)}
+                                />
+                                <span className="text-slate-400 text-xs font-bold">-</span>
+                                <input
+                                  type="text"
+                                  placeholder="End (00:00:10)"
+                                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono focus:ring-1 focus:ring-light-blue dark:focus:ring-cm-gold outline-none"
+                                  value={download.trimEnd || ''}
+                                  onChange={e => updateTrim(download.id, 'trimEnd', e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => executeDownload(download)}
+                            className="w-full bg-light-blue dark:bg-cm-gold text-white dark:text-cm-blue px-4 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Download Now</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}

@@ -20,7 +20,7 @@ export function AnalyticsView() {
     });
 
     const pData: Record<Platform, number> = {
-      instagram: 0, tiktok: 0, facebook: 0, twitter: 0, youtube: 0, unknown: 0
+      instagram: 0, tiktok: 0, facebook: 0, twitter: 0, youtube: 0, pinterest: 0, unknown: 0
     };
 
     let successful = 0;

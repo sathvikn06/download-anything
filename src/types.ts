@@ -16,6 +16,8 @@ export interface DownloadItem {
   title?: string;
   thumbnail?: string;
   media?: { url: string; type: string; thumbnail?: string }[];
+  trimStart?: string;
+  trimEnd?: string;
   createdAt: number;
   completedAt?: number;
   error?: string;

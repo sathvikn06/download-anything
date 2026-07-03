@@ -3,6 +3,7 @@ import dl from 'btch-downloader';
 import youtubedl from 'youtube-dl-exec';
 import { ZipArchive } from 'archiver';
 import { Readable } from 'stream';
+import { spawn } from 'child_process';
 
 const app = express();
 app.use(express.json());
@@ -55,9 +56,9 @@ app.post('/api/info', async (req, res) => {
        try {
          const info = await dl.pinterest(url);
          title = 'Pinterest Media';
-         if (info?.result && info.result.url) {
-             const isImage = info.result.url.includes('.jpg') || info.result.url.includes('.png');
-             media.push({ url: info.result.url, type: isImage ? 'image' : 'video', thumbnail });
+         if (info?.result && (info.result as any).url) {
+             const isImage = (info.result as any).url.includes('.jpg') || (info.result as any).url.includes('.png');
+             media.push({ url: (info.result as any).url, type: isImage ? 'image' : 'video', thumbnail });
          }
        } catch (e) {}
     }
@@ -70,10 +71,10 @@ app.post('/api/info', async (req, res) => {
               noCheckCertificates: true,
               noWarnings: true,
            });
-           title = info.title || title;
-           thumbnail = info.thumbnail || thumbnail;
+           title = (info as any).title || title;
+           thumbnail = (info as any).thumbnail || thumbnail;
            if (media.length === 0) {
-               media.push({ url: info.url, type: 'video', thumbnail });
+               media.push({ url: (info as any).url, type: 'video', thumbnail });
            }
        } catch (e: any) {
            console.log("yt-dlp fallback failed:", e.message);
@@ -96,6 +97,27 @@ app.get('/api/download', async (req, res) => {
     const disposition = isInline ? 'inline' : 'attachment';
 
     if (direct === 'true') {
+        const { start, end } = req.query;
+        if (start || end) {
+            const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
+            res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
+            const ffmpegArgs = [];
+            if (start) ffmpegArgs.push('-ss', start as string);
+            if (end) ffmpegArgs.push('-to', end as string);
+            ffmpegArgs.push('-i', url);
+            ffmpegArgs.push('-c', 'copy');
+            if (format === 'video/mp4') {
+                ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
+                ffmpegArgs.push('-f', 'mp4');
+            } else if (format === 'audio/mp3') {
+                ffmpegArgs.push('-f', 'mp3');
+            }
+            ffmpegArgs.push('pipe:1');
+            const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+            ffmpegProc.stdout.pipe(res);
+            return;
+        }
+
         const response = await fetch(url);
         if (response.ok && response.body) {
             const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
@@ -144,7 +166,7 @@ app.get('/api/download', async (req, res) => {
        }
     } else if (url.includes('twitter.com') || url.includes('x.com')) {
        if (format !== 'image/jpeg') {
-           const info = await dl.twitter(url);
+           const info = await dl.twitter(url) as any;
            if (info && info.length > 0) {
                mediaUrl = info[0].url;
            }
@@ -152,13 +174,33 @@ app.get('/api/download', async (req, res) => {
     } else if (url.includes('pinterest.com') || url.includes('pin.it')) {
        try {
            const info = await dl.pinterest(url);
-           if (info?.result && info.result.url) {
-               mediaUrl = info.result.url;
+           if (info?.result && (info.result as any).url) {
+               mediaUrl = (info.result as any).url;
            }
        } catch (e) {}
     }
 
     if (mediaUrl) {
+       const { start, end } = req.query;
+       if (start || end) {
+           const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
+           res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
+           const ffmpegArgs = [];
+           if (start) ffmpegArgs.push('-ss', start as string);
+           if (end) ffmpegArgs.push('-to', end as string);
+           ffmpegArgs.push('-i', mediaUrl);
+           ffmpegArgs.push('-c', 'copy');
+           if (format === 'video/mp4') {
+               ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
+               ffmpegArgs.push('-f', 'mp4');
+           } else if (format === 'audio/mp3') {
+               ffmpegArgs.push('-f', 'mp3');
+           }
+           ffmpegArgs.push('pipe:1');
+           const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+           ffmpegProc.stdout.pipe(res);
+           return;
+       }
        // redirect to actual URL
        return res.redirect(mediaUrl);
     }
@@ -166,9 +208,34 @@ app.get('/api/download', async (req, res) => {
     // fallback to yt-dlp
     let ytdlFormat = format === 'audio/mp3' ? 'bestaudio/best' : format === 'image/jpeg' ? 'best[ext=jpg]/best' : 'best';
     
-    // send attachment headers before piping
     const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
     res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
+
+    const { start, end } = req.query;
+    if (start || end) {
+       const info = await youtubedl(url, {
+         dumpJson: true,
+         format: ytdlFormat,
+         noCheckCertificates: true,
+         noWarnings: true,
+       });
+       const directUrl = (info as any).url;
+       const ffmpegArgs = [];
+       if (start) ffmpegArgs.push('-ss', start as string);
+       if (end) ffmpegArgs.push('-to', end as string);
+       ffmpegArgs.push('-i', directUrl);
+       ffmpegArgs.push('-c', 'copy');
+       if (format === 'video/mp4') {
+           ffmpegArgs.push('-movflags', 'frag_keyframe+empty_moov');
+           ffmpegArgs.push('-f', 'mp4');
+       } else if (format === 'audio/mp3') {
+           ffmpegArgs.push('-f', 'mp3');
+       }
+       ffmpegArgs.push('pipe:1');
+       const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+       ffmpegProc.stdout.pipe(res);
+       return;
+    }
 
     const subprocess = youtubedl.exec(url, {
       output: '-',
