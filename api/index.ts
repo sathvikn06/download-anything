@@ -1,9 +1,33 @@
 import express from 'express';
 import dl from 'btch-downloader';
 import youtubedl from 'youtube-dl-exec';
-import { ZipArchive } from 'archiver';
+
 import { Readable } from 'stream';
 import { spawn } from 'child_process';
+
+
+
+function isValidTime(time: string) {
+  return /^\d{1,2}:\d{2}:\d{2}(\.\d+)?$/.test(time) || /^\d+(\.\d+)?$/.test(time);
+}
+
+function isValidUrl(string: string) {
+  try {
+    const newUrl = new URL(string);
+    if (newUrl.protocol !== "http:" && newUrl.protocol !== "https:") return false;
+    
+    // Basic SSRF protection
+    const hostname = newUrl.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
+    if (hostname.startsWith("169.254.") || hostname.startsWith("10.") || hostname.match(/^192\.168\./) || hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
+       return false;
+    }
+    
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -12,6 +36,7 @@ app.use(express.json());
 app.post('/api/info', async (req, res) => {
   try {
     const { url } = req.body;
+    if (!url || typeof url !== 'string' || !isValidUrl(url)) return res.status(400).json({ error: 'Invalid URL' });
     let title = 'Media';
     let thumbnail = '';
     let media: any[] = [];
@@ -92,7 +117,7 @@ app.post('/api/info', async (req, res) => {
 app.get('/api/download', async (req, res) => {
   try {
     const { url, format, quality, direct } = req.query;
-    if (!url || typeof url !== 'string') return res.status(400).send('URL is required');
+    if (!url || typeof url !== 'string' || !isValidUrl(url)) return res.status(400).send('Invalid URL');
 
     const isInline = req.query.inline === 'true';
     const disposition = isInline ? 'inline' : 'attachment';
@@ -104,8 +129,8 @@ app.get('/api/download', async (req, res) => {
             res.header('Content-Type', format as string);
             res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
             const ffmpegArgs = [];
-            if (start) ffmpegArgs.push('-ss', start as string);
-            if (end) ffmpegArgs.push('-to', end as string);
+            if (start && isValidTime(start as string)) ffmpegArgs.push("-ss", start as string);
+            if (end && isValidTime(end as string)) ffmpegArgs.push("-to", end as string);
             ffmpegArgs.push('-i', 'pipe:0');
             if (format === 'video/mp4') {
                 ffmpegArgs.push('-c', 'copy');
@@ -206,8 +231,8 @@ app.get('/api/download', async (req, res) => {
            res.header('Content-Type', format as string);
            res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
            const ffmpegArgs = [];
-           if (start) ffmpegArgs.push('-ss', start as string);
-           if (end) ffmpegArgs.push('-to', end as string);
+           if (start && isValidTime(start as string)) ffmpegArgs.push("-ss", start as string);
+           if (end && isValidTime(end as string)) ffmpegArgs.push("-to", end as string);
            ffmpegArgs.push('-i', 'pipe:0');
            if (format === 'video/mp4') {
                ffmpegArgs.push('-c', 'copy');
@@ -245,7 +270,22 @@ app.get('/api/download', async (req, res) => {
     }
 
     // fallback to yt-dlp
-    let ytdlFormat = format === 'audio/mp3' ? 'bestaudio/best' : format === 'image/jpeg' ? 'best[ext=jpg]/best' : 'best';
+    let ytdlFormat = 'best';
+    if (format === 'audio/mp3') {
+        ytdlFormat = 'bestaudio/best';
+    } else if (format === 'image/jpeg') {
+        ytdlFormat = 'best[ext=jpg]/best';
+    } else {
+        if (quality === 'highest') {
+            ytdlFormat = 'bestvideo+bestaudio/best';
+        } else if (quality === 'high') {
+            ytdlFormat = 'best[height<=1080]/best';
+        } else if (quality === 'medium') {
+            ytdlFormat = 'best[height<=720]/best';
+        } else if (quality === 'low') {
+            ytdlFormat = 'best[height<=480]/best';
+        }
+    }
     
     const fileName = format === 'audio/mp3' ? 'audio.mp3' : format === 'image/jpeg' ? 'image.jpg' : 'download.mp4';
     res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
@@ -263,8 +303,8 @@ app.get('/api/download', async (req, res) => {
        res.header('Content-Type', format as string);
        res.header('Content-Disposition', `${disposition}; filename="${fileName}"`);
        const ffmpegArgs = [];
-       if (start) ffmpegArgs.push('-ss', start as string);
-       if (end) ffmpegArgs.push('-to', end as string);
+       if (start && isValidTime(start as string)) ffmpegArgs.push("-ss", start as string);
+       if (end && isValidTime(end as string)) ffmpegArgs.push("-to", end as string);
        ffmpegArgs.push('-i', 'pipe:0');
        if (format === 'video/mp4') {
            ffmpegArgs.push('-c', 'copy');

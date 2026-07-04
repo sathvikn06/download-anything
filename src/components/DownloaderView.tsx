@@ -8,6 +8,7 @@ export function DownloaderView() {
   const { addDownload } = useHistory();
   const [url, setUrl] = useState<string>('');
   const [format, setFormat] = useState<DownloadFormat>('video/mp4');
+  const [quality, setQuality] = useState<DownloadQuality>('highest');
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState<DownloadItem[]>([]);
 
@@ -22,7 +23,7 @@ export function DownloaderView() {
       url: url.trim(),
       platform: detectPlatform(url.trim()),
       format,
-      quality: 'highest',
+      quality,
       status: 'idle',
       progress: 0,
       createdAt: Date.now(),
@@ -111,6 +112,16 @@ export function DownloaderView() {
         />
         <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-4">
           <select 
+            value={quality}
+            onChange={(e) => setQuality(e.target.value as DownloadQuality)}
+            className="bg-transparent border-none text-xs font-dot uppercase tracking-widest text-black/60 dark:text-white/60 focus:ring-0 outline-none cursor-pointer hidden sm:block appearance-none pr-4"
+          >
+            <option value="highest">HQ</option>
+            <option value="high">1080P</option>
+            <option value="medium">720P</option>
+            <option value="low">480P</option>
+          </select>
+          <select 
             value={format}
             onChange={(e) => setFormat(e.target.value as DownloadFormat)}
             className="bg-transparent border-none text-xs font-dot uppercase tracking-widest text-black/60 dark:text-white/60 focus:ring-0 outline-none cursor-pointer hidden sm:block appearance-none pr-4"
@@ -133,6 +144,16 @@ export function DownloaderView() {
 
       {/* Format Selector Mobile */}
       <div className="flex justify-center sm:hidden">
+        <select 
+          value={quality}
+          onChange={(e) => setQuality(e.target.value as DownloadQuality)}
+          className="bg-transparent border-none text-xs font-dot uppercase tracking-widest focus:ring-0 outline-none"
+        >
+          <option value="highest">HQ</option>
+          <option value="high">1080P</option>
+          <option value="medium">720P</option>
+          <option value="low">480P</option>
+        </select>
         <select 
           value={format}
           onChange={(e) => setFormat(e.target.value as DownloadFormat)}
@@ -226,14 +247,14 @@ export function DownloaderView() {
                           {download.media?.map((m, idx) => (
                             <div key={idx} className="relative group overflow-hidden flex flex-col border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
                               {m.type === 'video' ? (
-                                <video src={`/api/download?url=${encodeURIComponent(m.url)}&format=video/mp4&direct=true&inline=true`} className="w-full h-24 object-cover grayscale opacity-80" />
+                                <video src={`/api/download?url=${encodeURIComponent(m.url)}&format=video/mp4&quality=${encodeURIComponent(download.quality)}&direct=true&inline=true`} className="w-full h-24 object-cover grayscale opacity-80" />
                               ) : (
-                                <img src={`/api/download?url=${encodeURIComponent(m.url)}&format=image/jpeg&direct=true&inline=true`} alt={`Media ${idx}`} className="w-full h-24 object-cover grayscale opacity-80" />
+                                <img src={`/api/download?url=${encodeURIComponent(m.url)}&format=image/jpeg&quality=${encodeURIComponent(download.quality)}&direct=true&inline=true`} alt={`Media ${idx}`} className="w-full h-24 object-cover grayscale opacity-80" />
                               )}
                               <button
                                 onClick={() => {
                                   const a = document.createElement('a');
-                                  a.href = `/api/download?url=${encodeURIComponent(m.url)}&format=${m.type === 'video' ? 'video/mp4' : 'image/jpeg'}&direct=true`;
+                                  a.href = `/api/download?url=${encodeURIComponent(m.url)}&format=${m.type === 'video' ? 'video/mp4' : 'image/jpeg'}&quality=${encodeURIComponent(download.quality)}&direct=true`;
                                   a.download = '';
                                   document.body.appendChild(a);
                                   a.click();

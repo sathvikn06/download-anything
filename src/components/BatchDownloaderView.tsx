@@ -6,6 +6,7 @@ import { Platform } from '../types';
 export function BatchDownloaderView() {
   const [urls, setUrls] = useState('');
   const [format, setFormat] = useState('video/mp4');
+  const [quality, setQuality] = useState('highest');
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +69,16 @@ export function BatchDownloaderView() {
         </div>
 
         <div className="flex items-center gap-4">
+          <select 
+            value={quality}
+            onChange={(e) => setQuality(e.target.value)}
+            className="bg-transparent border-none text-xs font-dot uppercase tracking-widest text-black/60 dark:text-white/60 focus:ring-0 outline-none cursor-pointer appearance-none pr-4"
+          >
+            <option value="highest">HQ</option>
+            <option value="high">1080P</option>
+            <option value="medium">720P</option>
+            <option value="low">480P</option>
+          </select>
           <select 
             value={format}
             onChange={(e) => setFormat(e.target.value)}

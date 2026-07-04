@@ -28,7 +28,7 @@ export function AnalyzerView() {
       const aiRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, title, text: JSON.stringify(data) })
+        body: JSON.stringify({ url, title, text: JSON.stringify({ ...data, media: undefined }) })
       });
       
       const aiData = await aiRes.json();

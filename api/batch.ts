@@ -2,13 +2,33 @@ import express from 'express';
 import dl from 'btch-downloader';
 import youtubedl from 'youtube-dl-exec';
 import { ZipArchive } from 'archiver';
-import archiver from 'archiver';
+
+
+
+function isValidUrl(string: string) {
+  try {
+    const newUrl = new URL(string);
+    if (newUrl.protocol !== "http:" && newUrl.protocol !== "https:") return false;
+    
+    // Basic SSRF protection
+    const hostname = newUrl.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return false;
+    if (hostname.startsWith("169.254.") || hostname.startsWith("10.") || hostname.match(/^192\.168\./) || hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
+       return false;
+    }
+    
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 
 const router = express.Router();
 
 router.post('/', async (req, res) => {
   try {
-    const { urls, format } = req.body;
+    const { urls, format, quality } = req.body;
     
     if (!urls || !Array.isArray(urls)) {
       return res.status(400).json({ error: 'Invalid urls array' });
@@ -17,9 +37,7 @@ router.post('/', async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="batch_download.zip"');
 
-    const archive = archiver('zip', {
-      zlib: { level: 9 }
-    });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
 
     archive.on('error', function(err: any) {
       console.error(err);
@@ -30,6 +48,10 @@ router.post('/', async (req, res) => {
 
     for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
+        if (typeof url !== "string" || !isValidUrl(url)) {
+            archive.append("Invalid URL: " + url, { name: "error_" + (i + 1) + ".txt" });
+            continue;
+        }
         try {
             let mediaUrl = null;
             let extension = format === 'audio/mp3' ? 'mp3' : 'mp4';
@@ -64,7 +86,20 @@ router.post('/', async (req, res) => {
                 }
             } else {
                 // yt-dlp fallback for generic URLs
-                let ytdlFormat = format === 'audio/mp3' ? 'bestaudio/best' : 'best';
+                let ytdlFormat = 'best';
+                if (format === 'audio/mp3') {
+                    ytdlFormat = 'bestaudio/best';
+                } else {
+                    if (quality === 'highest') {
+                        ytdlFormat = 'bestvideo+bestaudio/best';
+                    } else if (quality === 'high') {
+                        ytdlFormat = 'best[height<=1080]/best';
+                    } else if (quality === 'medium') {
+                        ytdlFormat = 'best[height<=720]/best';
+                    } else if (quality === 'low') {
+                        ytdlFormat = 'best[height<=480]/best';
+                    }
+                }
                 const info = await youtubedl(url, {
                      dumpJson: true,
                      format: ytdlFormat,
